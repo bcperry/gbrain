@@ -2005,6 +2005,9 @@ function instantiateExpansion(recipe: Recipe, modelId: string, cfg: AIGatewayCon
       return createAnthropic({ apiKey }).languageModel(modelId);
     }
     case 'openai-compatible': {
+      if (recipe.id === 'github-copilot') {
+        return instantiateGithubCopilotResponsesModel(recipe, modelId, cfg, 'expansion');
+      }
       // D12=A: unified auth via Recipe.resolveAuth (or default).
       const auth = applyResolveAuth(recipe, cfg, 'expansion');
       // v0.32: env-templated base URL + optional fetch wrapper.
@@ -2017,6 +2020,43 @@ function instantiateExpansion(recipe: Recipe, modelId: string, cfg: AIGatewayCon
       }).languageModel(modelId);
     }
   }
+}
+
+/**
+ * GitHub Copilot chat/expansion path:
+ * use OpenAI provider's Responses model surface instead of the generic
+ * openai-compatible chat/completions surface so GPT-5-class models are
+ * routable when Copilot only exposes them via /responses.
+ */
+function instantiateGithubCopilotResponsesModel(
+  recipe: Recipe,
+  modelId: string,
+  cfg: AIGatewayConfig,
+  touchpoint: 'chat' | 'expansion',
+): any {
+  const auth = applyResolveAuth(recipe, cfg, touchpoint);
+  const compat = applyOpenAICompatConfig(recipe, cfg);
+
+  if (!auth.apiKey) {
+    throw new AIConfigError(
+      `GitHub Copilot ${touchpoint} requires a bearer token-derived apiKey.`,
+      recipe.setup_hint,
+    );
+  }
+
+  const client = createOpenAI({
+    apiKey: auth.apiKey,
+    baseURL: compat.baseURL,
+    ...(compat.fetch ? { fetch: compat.fetch } : {}),
+    ...(auth.headers ? { headers: auth.headers } : {}),
+  }) as any;
+
+  // AI SDK OpenAI provider exposes .responses() for the /responses API.
+  // Keep a languageModel fallback for SDK/back-compat safety.
+  if (typeof client.responses === 'function') {
+    return client.responses(modelId);
+  }
+  return client.languageModel(modelId);
 }
 
 const ExpansionSchema = z.object({
@@ -2372,6 +2412,9 @@ function instantiateChat(recipe: Recipe, modelId: string, cfg: AIGatewayConfig):
       return createAnthropic({ apiKey }).languageModel(modelId);
     }
     case 'openai-compatible': {
+      if (recipe.id === 'github-copilot') {
+        return instantiateGithubCopilotResponsesModel(recipe, modelId, cfg, 'chat');
+      }
       // D12=A: unified auth via Recipe.resolveAuth (or default).
       const auth = applyResolveAuth(recipe, cfg, 'chat');
       // v0.32: env-templated base URL + optional fetch wrapper.

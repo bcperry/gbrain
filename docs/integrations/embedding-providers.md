@@ -144,6 +144,7 @@ gbrain providers test --touchpoint chat --model github-copilot:gpt-5.5
 Notes:
 
 - `github-copilot` chat models are dynamic; run `curl https://api.githubcopilot.com/models` with your bearer token to inspect your current catalog.
+- gbrain routes `github-copilot` chat/expansion through the OpenAI Responses API wiring (not plain `/chat/completions`) so GPT-5-class Copilot models can be used when available to your account.
 - `supports_subagent_loop` is intentionally `false` for this recipe pending replay-stability validation of tool-call ids.
 - Override endpoint only when needed via `COPILOT_BASE_URL` (proxy/self-hosted edge).
 
