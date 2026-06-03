@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "gbrain": {
+      "type": "stdio",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\gbrain-mcp-copilot.ps1"
+      ]
+    }
+  }
+}
