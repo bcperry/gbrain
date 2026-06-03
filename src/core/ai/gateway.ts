@@ -80,6 +80,14 @@ const DEFAULT_RERANKER_MODEL = 'zeroentropyai:zerank-2';
 let _config: AIGatewayConfig | null = null;
 const _modelCache = new Map<string, any>();
 
+function authEnvReady(recipe: Recipe, env: Record<string, string | undefined>): boolean {
+  const required = recipe.auth_env?.required ?? [];
+  const anyRequired = recipe.auth_env?.any_required ?? [];
+  if (required.some(k => !env[k])) return false;
+  if (anyRequired.length > 0 && !anyRequired.some(k => !!env[k])) return false;
+  return true;
+}
+
 /**
  * v0.31.12 recipe-models merge: per-gateway-instance set of model ids the
  * user opted into via config. Keyed by provider id (`anthropic`, `openai`,
@@ -686,6 +694,10 @@ export function diagnoseEmbedding(modelOverride?: string): EmbeddingDiagnosis {
 
   const required = recipe.auth_env?.required ?? [];
   const missing = required.filter(k => !_config!.env[k]);
+  const anyRequired = recipe.auth_env?.any_required ?? [];
+  if (anyRequired.length > 0 && !anyRequired.some(k => !!_config!.env[k])) {
+    missing.push(...anyRequired);
+  }
   if (missing.length > 0) {
     return {
       ok: false,
@@ -751,9 +763,7 @@ export function isAvailable(touchpoint: TouchpointKind, modelOverride?: string):
     if (!touchpointConfig) return false;
 
     // For openai-compatible without auth requirements (Ollama local), treat as always-available.
-    const required = recipe.auth_env?.required ?? [];
-    if (required.length === 0) return true;
-    return required.every(k => !!_config!.env[k]);
+    return authEnvReady(recipe, _config!.env);
   } catch {
     return false;
   }

@@ -39,6 +39,7 @@ The resolved provider + dimensions get persisted to `~/.gbrain/config.json` atom
 | `anthropic` | (no embedding model — chat only) | — | — | — | — |
 | `deepseek` | (no embedding model — chat only) | — | — | — | — |
 | `groq` | (no embedding model — chat only) | — | — | — | — |
+| `github-copilot` | `COPILOT_GITHUB_TOKEN` or `GH_TOKEN` or `GITHUB_TOKEN` | 1536 (`text-embedding-3-small`) | subscription-based | no | model-dependent |
 
 **Note on local providers.** Ollama and llama-server have no required API key, so they don't show up in env-detection auto-pick. Pick them explicitly with `--embedding-model ollama:<model>` to avoid silently routing to a daemon that may not be running.
 
@@ -112,6 +113,39 @@ Single OpenAI-compatible API for fan-out to OpenAI, Anthropic, Google, DeepSeek,
 - `OPENROUTER_REFERER` (default `https://gbrain.ai`) and `OPENROUTER_TITLE` (default `gbrain`) — attribution headers for OR's leaderboard. Forks running gbrain inside a different agent stack (OpenClaw deployments etc.) should set these so their traffic gets attributed to them, not gbrain.
 
 **Subagent loops**: gbrain's subagent infrastructure hard-pins to Anthropic-direct (stable `tool_use_id` across crashes/replays). OR-routed Anthropic is rejected at submit time regardless of the recipe flag. If you want the price/availability story OR offers for tool-calling, use it for chat only and keep an Anthropic key for subagent work.
+
+### GitHub Copilot (subscription)
+
+Use GitHub Copilot subscription auth directly against `https://api.githubcopilot.com`.
+This is a Copilot-backed provider recipe (`github-copilot:*`), not GitHub Models/BYOK.
+
+Auth env precedence mirrors Copilot CLI:
+
+- `COPILOT_GITHUB_TOKEN` (preferred)
+- `GH_TOKEN`
+- `GITHUB_TOKEN`
+
+Quick setup:
+
+```bash
+# one-time in your shell profile
+export COPILOT_GITHUB_TOKEN="$(gh auth token)"
+
+# pick Copilot for chat
+gbrain config set chat_model github-copilot:gpt-5.5
+
+# optional: use Copilot for expansion too
+gbrain config set expansion_model github-copilot:gpt-5.4-mini
+
+# smoke test
+gbrain providers test --touchpoint chat --model github-copilot:gpt-5.5
+```
+
+Notes:
+
+- `github-copilot` chat models are dynamic; run `curl https://api.githubcopilot.com/models` with your bearer token to inspect your current catalog.
+- `supports_subagent_loop` is intentionally `false` for this recipe pending replay-stability validation of tool-call ids.
+- Override endpoint only when needed via `COPILOT_BASE_URL` (proxy/self-hosted edge).
 
 ### Azure OpenAI
 

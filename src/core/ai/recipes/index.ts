@@ -23,6 +23,7 @@ import { zhipu } from './zhipu.ts';
 import { azureOpenAI } from './azure-openai.ts';
 import { zeroentropyai } from './zeroentropyai.ts';
 import { llamaServerReranker } from './llama-server-reranker.ts';
+import { githubCopilot } from './github-copilot.ts';
 
 const ALL: Recipe[] = [
   openai,
@@ -41,6 +42,7 @@ const ALL: Recipe[] = [
   dashscope,
   zhipu,
   azureOpenAI,
+  githubCopilot,
   zeroentropyai,
 ];
 

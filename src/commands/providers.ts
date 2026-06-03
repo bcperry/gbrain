@@ -46,8 +46,10 @@ function configureFromEnv(): void {
 
 export function envReady(recipe: Recipe, env: NodeJS.ProcessEnv = process.env): boolean {
   const required = recipe.auth_env?.required ?? [];
-  if (required.length === 0) return true; // e.g. local Ollama
-  return required.every(k => !!env[k]);
+  const anyRequired = recipe.auth_env?.any_required ?? [];
+  if (required.some(k => !env[k])) return false;
+  if (anyRequired.length > 0 && !anyRequired.some(k => !!env[k])) return false;
+  return true; // e.g. local Ollama
 }
 
 /**
@@ -75,7 +77,15 @@ export function formatRecipeTable(recipes: Recipe[], env: NodeJS.ProcessEnv = pr
     const hasExpand = !!r.touchpoints.expansion;
     const hasChat = !!r.touchpoints.chat && r.touchpoints.chat.models.length > 0;
     const ready = envReady(r, env);
-    const status = ready ? '✓ ready' : `✗ missing ${r.auth_env?.required?.[0] ?? 'setup'}`;
+    const missingLabel = (() => {
+      const required = r.auth_env?.required ?? [];
+      const anyRequired = r.auth_env?.any_required ?? [];
+      const missing = required.find(k => !env[k]);
+      if (missing) return missing;
+      if (anyRequired.length > 0 && !anyRequired.some(k => !!env[k])) return anyRequired.join(' or ');
+      return 'setup';
+    })();
+    const status = ready ? '✓ ready' : `✗ missing ${missingLabel}`;
     rows.push(
       r.id.padEnd(idCol) +
       r.tier.padEnd(18) +

@@ -33,6 +33,18 @@ describe('envReady', () => {
     expect(ollama).toBeDefined();
     expect(envReady(ollama!, {})).toBe(true);
   });
+
+  test('true when any_required auth env is satisfied (github-copilot)', () => {
+    const copilot = getRecipe('github-copilot');
+    expect(copilot).toBeDefined();
+    expect(envReady(copilot!, { GH_TOKEN: 'gho_test' })).toBe(true);
+  });
+
+  test('false when no any_required auth env is set (github-copilot)', () => {
+    const copilot = getRecipe('github-copilot');
+    expect(copilot).toBeDefined();
+    expect(envReady(copilot!, {})).toBe(false);
+  });
 });
 
 describe('formatRecipeTable', () => {
@@ -60,6 +72,13 @@ describe('formatRecipeTable', () => {
     const openaiLine = out.split('\n').find(line => line.startsWith('openai'));
     expect(openaiLine).toBeDefined();
     expect(openaiLine).toContain('✗ missing OPENAI_API_KEY');
+  });
+
+  test('shows OR-style missing status for github-copilot', () => {
+    const out = formatRecipeTable(listRecipes(), {});
+    const copilotLine = out.split('\n').find(line => line.startsWith('github-copilot'));
+    expect(copilotLine).toBeDefined();
+    expect(copilotLine).toContain('✗ missing COPILOT_GITHUB_TOKEN or GH_TOKEN or GITHUB_TOKEN');
   });
 
   test('each recipe appears at most once', () => {

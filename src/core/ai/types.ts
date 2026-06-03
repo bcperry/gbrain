@@ -233,6 +233,8 @@ export interface Recipe {
   /** Env var name(s) for auth; first is required, rest are optional. */
   auth_env?: {
     required: string[];
+    /** At least one of these env vars must be set (OR semantics). */
+    any_required?: string[];
     optional?: string[];
     setup_url?: string;
   };

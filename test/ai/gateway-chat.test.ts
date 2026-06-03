@@ -29,6 +29,14 @@ import { AIConfigError } from '../../src/core/ai/errors.ts';
 import { listRecipes, getRecipe } from '../../src/core/ai/recipes/index.ts';
 
 describe('chat touchpoint — recipe registry', () => {
+  test('github-copilot recipe exposes chat without subagent-loop guarantee', () => {
+    const r = getRecipe('github-copilot');
+    expect(r).toBeDefined();
+    expect(r!.touchpoints.chat).toBeDefined();
+    expect(r!.touchpoints.chat!.supports_tools).toBe(true);
+    expect(r!.touchpoints.chat!.supports_subagent_loop).toBe(false);
+  });
+
   test('all six chat-capable providers ship a chat touchpoint with supports_subagent_loop', () => {
     const expected = ['anthropic', 'openai', 'google', 'deepseek', 'groq', 'together'];
     for (const id of expected) {
@@ -173,6 +181,11 @@ describe('chat touchpoint — gateway config plumbing', () => {
   test('isAvailable("chat") returns false when configured provider has no key', () => {
     configureGateway({ chat_model: 'openai:gpt-5.2', env: {} });
     expect(isAvailable('chat')).toBe(false);
+  });
+
+  test('isAvailable("chat") returns true for github-copilot when GH_TOKEN is set', () => {
+    configureGateway({ chat_model: 'github-copilot:gpt-5.5', env: { GH_TOKEN: 'gho_test' } });
+    expect(isAvailable('chat')).toBe(true);
   });
 
   test('isAvailable("chat") returns false on embedding-only chat target', () => {
