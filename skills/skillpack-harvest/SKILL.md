@@ -11,13 +11,20 @@ triggers:
   - "harvest this skill"
   - "harvest my skill"
   - "publish this skill to gbrain"
+  - "fork-only skill upstream"
   - "lift this skill"
+  - "lift this skill back into gbrain"
   - "share this skill"
+  - "skill with the gbrain bundle"
   - "promote this skill"
+  - "promote this skill to gbrain"
   - "promote my skill"
+  - "harvest my skill into gbrain"
   - "skill upstream"
   - "into the gbrain core"
+  - "custom skill into the gbrain core"
   - "gbrain bundle"
+  - "this skill in the gbrain bundle"
 mutating: true
 writes_pages: false
 writes_to:

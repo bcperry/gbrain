@@ -7,8 +7,30 @@ import {
   parseResolverEntries,
   extractDelegationTargets,
 } from "../src/core/check-resolvable.ts";
+import { parseSkillFrontmatter } from "../src/core/skill-frontmatter.ts";
 
 const SKILLS_DIR = join(import.meta.dir, "..", "skills");
+
+describe("parseSkillFrontmatter", () => {
+  test("parses CRLF frontmatter triggers on Windows-authored skill files", () => {
+    const content = [
+      "---",
+      "name: crlf-skill",
+      "description: test",
+      "triggers:",
+      "  - \"first trigger\"",
+      "  - \"second trigger\"",
+      "---",
+      "",
+      "# CRLF Skill",
+    ].join("\r\n");
+
+    expect(parseSkillFrontmatter(content)?.triggers).toEqual([
+      "first trigger",
+      "second trigger",
+    ]);
+  });
+});
 
 describe("parseResolverEntries", () => {
   test("extracts skill paths from markdown table rows", () => {

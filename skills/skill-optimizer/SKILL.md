@@ -4,10 +4,14 @@ version: 0.1.0
 description: Self-evolving skill optimization via SkillOpt-paper-grounded text-space optimizer.
 triggers:
   - "optimize this skill"
+  - "optimize this skill against my benchmark"
   - "tune the skill against the benchmark"
+  - "against the benchmark fixtures"
   - "make the skill better"
+  - "via the optimizer"
   - "run skillopt"
   - "skillopt for"
+  - "run skillopt for"
 mutating: true
 brain_first: exempt
 ---
