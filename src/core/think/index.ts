@@ -238,12 +238,41 @@ export async function runThink(
     fallback: 'opus',  // think is the high-stakes synthesis op; opus is the right default
   });
 
+  // Provider-neutral defaulting: if no think/deep/default/env override exists,
+  // align think with the configured chat model instead of forcing deep-tier
+  // Anthropic defaults.
+  let effectiveModel = modelUsed;
+  if (!opts.model) {
+    const [thinkModel, deepTierModel, defaultModel] = await Promise.all([
+      engine.getConfig('models.think'),
+      engine.getConfig('models.tier.deep'),
+      engine.getConfig('models.default'),
+    ]);
+    const hasExplicitThinkRouting =
+      !!thinkModel?.trim() ||
+      !!deepTierModel?.trim() ||
+      !!defaultModel?.trim() ||
+      !!process.env.GBRAIN_MODEL?.trim();
+
+    if (!hasExplicitThinkRouting) {
+      const chatModel = await resolveModel(engine, {
+        configKey: 'models.chat',
+        deprecatedConfigKey: 'chat_model',
+        tier: 'reasoning',
+        fallback: 'sonnet',
+      });
+      if (chatModel && chatModel.trim()) {
+        effectiveModel = chatModel;
+      }
+    }
+  }
+
   // #1698: fail fast on an unresolvable EXPLICIT model (CLI --model, or the MCP op's
   // model param) BEFORE gather, so we don't waste retrieval per failure (the 200-call
   // batch case). The default/configured-model path is unaffected (modelExplicit false →
   // it keeps the graceful no-LLM-stub degrade). Test/injected client + stub bypass.
   if (opts.modelExplicit && !opts.client && !opts.stubResponse) {
-    const probe = probeChatModel(normalizeModelId(modelUsed));
+    const probe = probeChatModel(normalizeModelId(effectiveModel));
     if (!probe.ok) {
       throw new Error(
         `think: --model "${opts.model}" is not usable (${probe.reason}): ${probe.detail}. ` +
@@ -437,19 +466,19 @@ export async function runThink(
     // That bypassed gateway config (gbrain config set anthropic_api_key)
     // because the Anthropic SDK only reads process.env.ANTHROPIC_API_KEY.
     // Closes #952 (think over MCP returns "no LLM available").
-    const client = opts.client ?? await tryBuildGatewayClient(modelUsed, { explicitModel: opts.modelExplicit });
+    const client = opts.client ?? await tryBuildGatewayClient(effectiveModel, { explicitModel: opts.modelExplicit });
     if (!client) {
-      warnings.push('NO_ANTHROPIC_API_KEY');
+      warnings.push('NO_CHAT_MODEL_AVAILABLE');
       // Degrade gracefully: return the gather without synthesis. Better than throwing.
       return {
         question: opts.question,
-        answer: '(no LLM available — set ANTHROPIC_API_KEY or pass `client`)',
+        answer: '(no LLM available — configure credentials for your selected chat model/provider or pass `client`)',
         citations: [],
         gaps: ['no LLM available; gather succeeded but synthesis skipped'],
         pagesGathered: gather.pages.length,
         takesGathered: gather.takes.length,
         graphHits: gather.graphSlugs.length,
-        modelUsed,
+        modelUsed: effectiveModel,
         rounds: 0,
         warnings,
         synthesisOk: false,  // #1698: no LLM ran — never persist this
@@ -462,7 +491,7 @@ export async function runThink(
       };
     }
     const result = await client.create({
-      model: modelUsed,
+      model: effectiveModel,
       max_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
@@ -505,7 +534,7 @@ export async function runThink(
     pagesGathered: gather.pages.length,
     takesGathered: gather.takes.length,
     graphHits: gather.graphSlugs.length,
-    modelUsed,
+    modelUsed: effectiveModel,
     rounds: 1,
     warnings,
     // #1698: persistable only when a real synthesis produced a non-empty answer.
@@ -748,7 +777,7 @@ function buildGracefulMessage(modelStr: string): {
     type: 'message',
     role: 'assistant',
     model: modelStr,
-    content: [{ type: 'text', text: '(no LLM available — set anthropic_api_key via gbrain config or ANTHROPIC_API_KEY env)' }],
+    content: [{ type: 'text', text: '(no LLM available — configure credentials for your selected chat model/provider via gbrain config or environment)' }],
     usage: { input_tokens: 0, output_tokens: 0 },
     stop_reason: 'end_turn',
   };

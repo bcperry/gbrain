@@ -211,11 +211,60 @@ describe('runThink (with stub client)', () => {
     delete process.env.ANTHROPIC_API_KEY;
     try {
       const result = await runThink(engine, { question: 'no key test' });
-      expect(result.warnings).toContain('NO_ANTHROPIC_API_KEY');
+      expect(result.warnings).toContain('NO_CHAT_MODEL_AVAILABLE');
       expect(result.answer).toContain('no LLM available');
       expect(result.rounds).toBe(0);
     } finally {
       if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
+    }
+  });
+
+  test('defaults to configured chat model when think/deep/default/env are unset', async () => {
+    const prevThink = await engine.getConfig('models.think');
+    const prevDeepTier = await engine.getConfig('models.tier.deep');
+    const prevDefault = await engine.getConfig('models.default');
+    const prevChat = await engine.getConfig('models.chat');
+    const prevLegacyChat = await engine.getConfig('chat_model');
+    const prevEnvModel = process.env.GBRAIN_MODEL;
+
+    try {
+      await engine.setConfig('models.think', '');
+      await engine.setConfig('models.tier.deep', '');
+      await engine.setConfig('models.default', '');
+      await engine.setConfig('chat_model', '');
+      await engine.setConfig('models.chat', 'github-copilot:gpt-5.5');
+      delete process.env.GBRAIN_MODEL;
+
+      const stubClient: ThinkLLMClient = {
+        create: async () => ({
+          id: 'msg_stub_chat_fallback',
+          type: 'message',
+          role: 'assistant',
+          model: 'stub',
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          usage: { input_tokens: 10, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, server_tool_use: null, service_tier: null },
+          content: [{
+            type: 'text',
+            text: JSON.stringify({ answer: 'pong', citations: [], gaps: [] }),
+          }],
+        }),
+      };
+
+      const result = await runThink(engine, {
+        question: 'fallback model chain test',
+        client: stubClient,
+      });
+
+      expect(result.modelUsed).toBe('github-copilot:gpt-5.5');
+    } finally {
+      await engine.setConfig('models.think', prevThink ?? '');
+      await engine.setConfig('models.tier.deep', prevDeepTier ?? '');
+      await engine.setConfig('models.default', prevDefault ?? '');
+      await engine.setConfig('models.chat', prevChat ?? '');
+      await engine.setConfig('chat_model', prevLegacyChat ?? '');
+      if (prevEnvModel === undefined) delete process.env.GBRAIN_MODEL;
+      else process.env.GBRAIN_MODEL = prevEnvModel;
     }
   });
 
@@ -290,7 +339,7 @@ describe('runThink — #1698 explicit-model hard error', () => {
     try {
       // model present but modelExplicit unset → early gate skipped; builder returns null.
       const result = await runThink(engine, { question: 'nonexplicit bad', model: 'bogusprovider:foo' });
-      expect(result.warnings).toContain('NO_ANTHROPIC_API_KEY');
+      expect(result.warnings).toContain('NO_CHAT_MODEL_AVAILABLE');
       expect(result.synthesisOk).toBe(false);
     } finally {
       if (origKey) process.env.ANTHROPIC_API_KEY = origKey;
