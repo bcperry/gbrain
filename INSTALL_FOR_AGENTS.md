@@ -38,6 +38,27 @@ restart the shell or add the PATH export to the shell profile.
 > bun install && bun link
 > ```
 
+### Windows / local-checkout path
+
+On Windows PowerShell, prefer the deterministic local-checkout path while
+developing or testing a provider branch:
+
+```powershell
+cd C:\Users\<you>\git\gbrain
+& "$env:USERPROFILE\.bun\bin\bun.exe" install
+& "$env:USERPROFILE\.bun\bin\bun.exe" link
+```
+
+If the `gbrain` shim is not on `PATH`, use the source CLI directly:
+
+```powershell
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts <command>
+```
+
+For this Copilot-enabled fork/branch, run from the local checkout (or install
+the fork/branch that contains the `github-copilot` provider) until the provider
+is available upstream.
+
 ## Step 2: API Keys
 
 Ask the user for these. gbrain defaults to the ZeroEntropy embedding + reranker stack
@@ -50,9 +71,72 @@ export OPENAI_API_KEY=sk-...          # fallback for vector search; also used fo
 export ANTHROPIC_API_KEY=sk-ant-...   # optional, improves search quality via query expansion
 ```
 
+### GitHub Copilot subscription auth
+
+If the operator wants to use their GitHub Copilot subscription instead of
+OpenAI/Anthropic keys, use the `github-copilot` provider. This is direct
+Copilot subscription auth against `https://api.githubcopilot.com`; it is not an
+OpenAI-compatible shim.
+
+Preferred token source is a GitHub CLI auth token from an account with an active
+Copilot subscription:
+
+```bash
+export COPILOT_GITHUB_TOKEN="$(gh auth token)"
+```
+
+PowerShell:
+
+```powershell
+$env:COPILOT_GITHUB_TOKEN = (& 'C:\Program Files\GitHub CLI\gh.exe' auth token)
+```
+
+Auth env precedence is:
+
+```text
+COPILOT_GITHUB_TOKEN > GH_TOKEN > GITHUB_TOKEN
+```
+
+Configure all AI surfaces to use Copilot:
+
+```bash
+gbrain config set embedding_model github-copilot:text-embedding-3-small
+gbrain config set embedding_dimensions 1536
+gbrain config set expansion_model github-copilot:gpt-5.4-mini
+gbrain config set chat_model github-copilot:gpt-5.5
+gbrain config set models.chat github-copilot:gpt-5.5
+gbrain config set models.tier.subagent github-copilot:gpt-5.5
+gbrain config set agent.use_gateway_loop true
+```
+
+PowerShell source-CLI form:
+
+```powershell
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts config set embedding_model github-copilot:text-embedding-3-small
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts config set embedding_dimensions 1536
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts config set expansion_model github-copilot:gpt-5.4-mini
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts config set chat_model github-copilot:gpt-5.5
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts config set models.chat github-copilot:gpt-5.5
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts config set models.tier.subagent github-copilot:gpt-5.5
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts config set agent.use_gateway_loop true
+```
+
+Verify Copilot before importing a large brain:
+
+```bash
+gbrain providers test --touchpoint chat --model github-copilot:gpt-5.5
+gbrain providers test --touchpoint embedding --model github-copilot:text-embedding-3-small
+gbrain think "Reply with exactly: pong"
+```
+
 Save to shell profile or `.env`. Keys are picked up by `gbrain config set` automatically
 or can be stored in `~/.gbrain/config.json` (file plane). Without any embedding provider,
 keyword search still works. Without Anthropic, search works but skips query expansion.
+
+With the Copilot configuration above, `gbrain think` and gateway-backed
+subagent loops do not require `ANTHROPIC_API_KEY`. Copilot models support the
+tool loop but do not support Anthropic prompt caching, so long subagent loops
+may cost more than cached Anthropic runs.
 
 ## Step 3: Create the Brain
 
@@ -60,6 +144,22 @@ keyword search still works. Without Anthropic, search works but skips query expa
 gbrain init                           # PGLite, no server needed
 gbrain doctor --json                  # verify all checks pass
 ```
+
+If the operator wants a separate brain for a separate agent on the same OS user,
+isolate it before `gbrain init`:
+
+```bash
+export GBRAIN_HOME="$HOME/.gbrain-other-agent"
+```
+
+PowerShell:
+
+```powershell
+$env:GBRAIN_HOME = "$env:USERPROFILE\.gbrain-other-agent"
+```
+
+Without `GBRAIN_HOME` isolation, multiple installs under the same OS user can
+share the same default config/database area.
 
 The user's markdown files (notes, docs, brain repo) are SEPARATE from this tool repo.
 Ask the user where their files are, or create a new brain repo:
@@ -191,7 +291,7 @@ scaffold the bundled skills into it:
 
 ```bash
 cd /path/to/agent/workspace
-gbrain skillpack scaffold --all       # copy 43 curated skills + RESOLVER.md
+gbrain skillpack scaffold --all       # copy bundled curated skills + RESOLVER.md
 ```
 
 Scaffolded skills are first-class files in your repo. Edit freely; re-running scaffold
@@ -215,6 +315,71 @@ The three most important skills to adopt immediately:
 
 3. **Conventions** (`skills/conventions/quality.md`) — citation format, back-linking
    iron law, source attribution. These are non-negotiable quality rules.
+
+Validate the bundled resolver after local edits or scaffold changes:
+
+```bash
+gbrain check-resolvable --strict --skills-dir skills/
+```
+
+On Windows/source CLI:
+
+```powershell
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent C:\Users\<you>\git\gbrain\src\cli.ts check-resolvable --strict --skills-dir C:\Users\<you>\git\gbrain\skills
+```
+
+Expected healthy output is `resolver_health: OK` with all bundled skills
+reachable.
+
+## Step 5.5: Optional HTTP MCP + Admin UI
+
+For another agent or local tool to use this brain over MCP, start the HTTP
+server:
+
+```bash
+gbrain serve --http --port 3131
+```
+
+PowerShell source-CLI form:
+
+```powershell
+cd C:\Users\<you>\git\gbrain
+$env:COPILOT_GITHUB_TOKEN = (& 'C:\Program Files\GitHub CLI\gh.exe' auth token)
+& "$env:USERPROFILE\.bun\bin\bun.exe" run --silent src\cli.ts serve --http --port 3131
+```
+
+The server prints:
+
+```text
+Admin: http://localhost:3131/admin
+MCP:   http://localhost:3131/mcp
+```
+
+It also prints an admin bootstrap token. Paste it into `/admin`, or mint a
+one-time magic link from a trusted local shell:
+
+```powershell
+$headers = @{ Authorization = "Bearer <admin-bootstrap-token>" }
+Invoke-RestMethod -Method Post -Uri http://localhost:3131/admin/api/issue-magic-link -Headers $headers -ContentType 'application/json' -Body '{}'
+```
+
+For MCP bearer access, create a token and give it to the other agent out of
+band:
+
+```bash
+gbrain auth create local-agent
+```
+
+Then register the MCP server in that agent as:
+
+```text
+URL: http://localhost:3131/mcp
+Authorization: Bearer <token>
+```
+
+Connecting to MCP provides operations/data. It does not automatically load
+GBrain skills into the agent prompt; scaffold or read `skills/RESOLVER.md` as
+described in Step 5.
 
 ## Step 6: Identity (optional)
 
